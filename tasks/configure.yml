@@ -1,0 +1,73 @@
+---
+
+# Needed to ensure some services start properly
+- name: Set hostname
+  become: yes
+  lineinfile:
+    dest: /etc/hosts
+    line: "127.0.0.1 {{ ansible_hostname }}"
+  notify:
+    - restart kafka
+  tags:
+    - kafka
+
+- name: Create log4j.properties
+  become: yes
+  template:
+    dest: "{{kafka.conf_dir}}/log4j.properties"
+    mode: "u=rw,og=r"
+    src: log4j.properties.j2
+    owner: "{{ kafka.user }}"
+    group: "{{ kafka.group }}"
+    mode: "u=rw,og=r"
+  notify:
+    - restart kafka
+  tags:
+    - kafka
+
+- name: Create server.properties
+  template:
+    dest: "{{ kafka.conf_dir }}/server.properties"
+    mode: "u=rw,og=r"
+    src: server.properties.j2
+    owner: "{{ kafka.user }}"
+    group: "{{ kafka.group }}"
+  notify:
+    - restart kafka
+  tags:
+    - kafka
+
+- name: "Create the kafka systemd service file"
+  template:
+    src: "kafka.service"
+    dest: "/etc/systemd/system/kafka.service owner={{ kafka.user }}"
+    group: "{{ kafka.group }}"
+    owner: "{{kafka.user}}"
+    mode: "u=rwx,og=rx"
+    force: yes
+  tags:
+    - kafka
+  notify:
+    - restart kafka
+
+- name: reload systemctl daemon
+  command: systemctl daemon-reload
+  tags:
+    - kafka
+
+- name: start and enable kafka
+  service:
+    name: kafka.service
+    state: restarted
+    enabled: true
+  tags:
+    - kafka
+
+- name: Wait for Kafka port
+  wait_for:
+    host: "{{ kafka.ip }}"
+    port: "{{ kafka.port }}"
+    state: started
+    timeout: 120
+  tags:
+    - kafka
